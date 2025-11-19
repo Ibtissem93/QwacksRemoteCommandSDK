@@ -24,24 +24,36 @@ namespace QwacksSDK.Utilities
 
             try
             {
+                // Clean the JSON string (remove extra quotes for primitives)
+                parameterJson = parameterJson.Trim();
+
                 // Handle primitive types
                 if (targetType == typeof(int))
                 {
-                    return (T)(object)int.Parse(parameterJson);
+                    // Remove quotes if wrapped
+                    string cleaned = parameterJson.Trim('"');
+                    return (T)(object)int.Parse(cleaned);
                 }
                 else if (targetType == typeof(float))
                 {
-                    return (T)(object)float.Parse(parameterJson);
+                    string cleaned = parameterJson.Trim('"');
+                    return (T)(object)float.Parse(cleaned);
                 }
                 else if (targetType == typeof(string))
                 {
-                    return (T)(object)parameterJson.Trim('"'); // Remove quotes if present
+                    // Remove surrounding quotes if present
+                    if (parameterJson.StartsWith("\"") && parameterJson.EndsWith("\""))
+                    {
+                        return (T)(object)parameterJson.Substring(1, parameterJson.Length - 2);
+                    }
+                    return (T)(object)parameterJson;
                 }
                 else if (targetType == typeof(bool))
                 {
-                    return (T)(object)bool.Parse(parameterJson);
+                    string cleaned = parameterJson.Trim('"').ToLower();
+                    return (T)(object)bool.Parse(cleaned);
                 }
-                // Handle Unity types
+                // Handle Unity types (these need full JSON objects)
                 else if (targetType == typeof(Vector3))
                 {
                     return (T)(object)JsonUtility.FromJson<Vector3>(parameterJson);
@@ -66,7 +78,7 @@ namespace QwacksSDK.Utilities
             }
             catch (Exception e)
             {
-                Debug.LogError($"[QwacksSDK] Failed to convert parameter to type {targetType.Name}: {e.Message}");
+                Debug.LogError($"[QwacksSDK] Failed to convert parameter to type {targetType.Name}: {e.Message}\nInput: {parameterJson}");
                 return default(T);
             }
         }

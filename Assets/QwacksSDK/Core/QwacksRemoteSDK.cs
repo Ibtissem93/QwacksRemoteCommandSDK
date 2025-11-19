@@ -73,8 +73,27 @@ namespace QwacksSDK.Core
 
         /// <summary>
         /// Process and execute a command from JSON message
-        /// Expected format: {"command": "CommandName", "parameters": {...}}
+        /// 
+        /// Supported JSON formats:
+        /// 
+        /// No parameters:
+        ///   {"command": "CommandName"}
+        /// 
+        /// Single parameter (primitive):
+        ///   {"command": "CommandName", "parameters": "value"}
+        ///   Example: {"command": "AwardPoints", "parameters": "100"}
+        /// 
+        /// Single parameter (object - Vector3, Color, custom types):
+        ///   {"command": "CommandName", "parameters": "{\"field\": value}"}
+        ///   Example: {"command": "MovePlayer", "parameters": "{\"x\": 5, \"y\": 0, \"z\": 3}"}
+        /// 
+        /// Two parameters:
+        ///   {"command": "CommandName", "param1": "value1", "param2": "value2"}
+        ///   Example: {"command": "TriggerEffect", "param1": "{\"x\": 8, \"y\": 0, \"z\": 8}", "param2": "explosion"}
+        /// 
+        /// Note: For object parameters (Vector3, Color, custom types), the value should be a JSON string containing the serialized object.
         /// </summary>
+
         public void ProcessCommand(string jsonMessage)
         {
             if (string.IsNullOrEmpty(jsonMessage))
@@ -142,17 +161,42 @@ namespace QwacksSDK.Core
                 }
                 else if (parameters.Length == 1)
                 {
-                    // One parameter - need to convert from JSON
+                    // One parameter - convert from JSON
                     Type paramType = parameters[0].ParameterType;
-                    object convertedParam = ConvertParameterByType(remoteCommand.parameters, paramType);
+
+                    // Get the parameters field value
+                    string paramJson = remoteCommand.Parameters;
+
+                    if (string.IsNullOrEmpty(paramJson))
+                    {
+                        Debug.LogError($"[QwacksSDK] Command '{commandName}' expects a parameter but none provided");
+                        return;
+                    }
+
+                    object convertedParam = ConvertParameterByType(paramJson, paramType);
 
                     commandDelegate.DynamicInvoke(convertedParam);
                     Debug.Log($"[QwacksSDK] ✓ Executed command: {commandName} with 1 parameter");
                 }
                 else if (parameters.Length == 2)
                 {
-                    // Two parameters - parse JSON object with named fields
-                    ParseAndInvokeTwoParameters(commandDelegate, remoteCommand.parameters);
+                    // Two parameters - use param1 and param2 fields
+                    Type param1Type = parameters[0].ParameterType;
+                    Type param2Type = parameters[1].ParameterType;
+
+                    string param1Json = remoteCommand.param1;
+                    string param2Json = remoteCommand.param2;
+
+                    if (string.IsNullOrEmpty(param1Json) || string.IsNullOrEmpty(param2Json))
+                    {
+                        Debug.LogError($"[QwacksSDK] Command '{commandName}' expects 2 parameters. Use 'param1' and 'param2' fields in JSON");
+                        return;
+                    }
+
+                    object convertedParam1 = ConvertParameterByType(param1Json, param1Type);
+                    object convertedParam2 = ConvertParameterByType(param2Json, param2Type);
+
+                    commandDelegate.DynamicInvoke(convertedParam1, convertedParam2);
                     Debug.Log($"[QwacksSDK] ✓ Executed command: {commandName} with 2 parameters");
                 }
                 else
@@ -162,7 +206,7 @@ namespace QwacksSDK.Core
             }
             catch (Exception e)
             {
-                Debug.LogError($"[QwacksSDK] Failed to execute command '{commandName}': {e.Message}");
+                Debug.LogError($"[QwacksSDK] Failed to execute command '{commandName}': {e.Message}\n{e.StackTrace}");
             }
         }
 
@@ -189,7 +233,6 @@ namespace QwacksSDK.Core
             // You can extend this to handle more complex scenarios
             Debug.LogWarning("[QwacksSDK] Two-parameter commands require custom JSON parsing");
         }
-
         #endregion
 
         #region Utility Methods
